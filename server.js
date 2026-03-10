@@ -37,7 +37,6 @@ app.post("/send-email", async (req, res) => {
     const { name, email, message } = req.body || {}
 
     if (!name || !email || !message) {
-      console.log("Missing fields")
       return res.status(400).json({
         success: false,
         error: "Missing fields",
@@ -45,11 +44,17 @@ app.post("/send-email", async (req, res) => {
     }
 
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      family: 4,
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 10000,
