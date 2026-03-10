@@ -8,7 +8,7 @@
     "start": "node server.js"
   },
   "repository": {
-    "type": "git",
+    "type": "module",
     "url": "git+https://github.com/prkiv6666/raykovagro-backend.git"
   },
   "keywords": [],
