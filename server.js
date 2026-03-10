@@ -21,27 +21,26 @@ app.get("/", (req, res) => {
   res.status(200).send("Backend is running")
 })
 
+app.get("/send-email", (req, res) => {
+  res.status(200).send("Use POST for /send-email")
+})
+
 app.post("/send-email", async (req, res) => {
+  console.log("POST /send-email called")
+
   try {
-    console.log("POST /send-email hit")
-    console.log("Request body:", req.body)
+    console.log("BODY:", JSON.stringify(req.body, null, 2))
     console.log("EMAIL_USER exists:", !!process.env.EMAIL_USER)
     console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS)
     console.log("EMAIL_TO exists:", !!process.env.EMAIL_TO)
 
-    const { name, email, message } = req.body
+    const { name, email, message } = req.body || {}
 
     if (!name || !email || !message) {
+      console.log("Missing fields")
       return res.status(400).json({
         success: false,
         error: "Missing fields",
-      })
-    }
-
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      return res.status(500).json({
-        success: false,
-        error: "Email credentials are missing in environment variables",
       })
     }
 
@@ -51,12 +50,13 @@ app.post("/send-email", async (req, res) => {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     })
 
     console.log("Transporter created")
-
-    // await transporter.verify()
-    console.log("Transporter verified")
+    console.log("Sending email...")
 
     const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -73,21 +73,21 @@ app.post("/send-email", async (req, res) => {
       message: "Email sent successfully",
     })
   } catch (error) {
-  console.error("SEND EMAIL ERROR FULL:", error)
-  console.error("ERROR MESSAGE:", error?.message)
-  console.error("ERROR CODE:", error?.code)
-  console.error("ERROR RESPONSE:", error?.response)
+    console.error("SEND EMAIL ERROR FULL:", error)
+    console.error("ERROR MESSAGE:", error?.message)
+    console.error("ERROR CODE:", error?.code)
+    console.error("ERROR COMMAND:", error?.command)
+    console.error("ERROR RESPONSE:", error?.response)
 
-  return res.status(500).json({
-    success: false,
-    error: "Server error",
-    details: error?.message || "Unknown error",
-    code: error?.code || null,
-  })
-}
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Server error",
+      code: error?.code || null,
+    })
+  }
 })
 
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 8080
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
