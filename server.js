@@ -7,19 +7,42 @@ dotenv.config()
 
 const app = express()
 
-app.use(cors())
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+)
+
 app.use(express.json())
 
 app.get("/", (req, res) => {
-  res.send("Backend is running")
+  res.status(200).send("Backend is running")
 })
 
 app.post("/send-email", async (req, res) => {
   try {
+    console.log("POST /send-email hit")
+    console.log("Request body:", req.body)
+    console.log("EMAIL_USER exists:", !!process.env.EMAIL_USER)
+    console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS)
+    console.log("EMAIL_TO exists:", !!process.env.EMAIL_TO)
+
     const { name, email, message } = req.body
 
     if (!name || !email || !message) {
-      return res.status(400).json({ error: "Missing fields" })
+      return res.status(400).json({
+        success: false,
+        error: "Missing fields",
+      })
+    }
+
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(500).json({
+        success: false,
+        error: "Email credentials are missing in environment variables",
+      })
     }
 
     const transporter = nodemailer.createTransport({
@@ -30,7 +53,12 @@ app.post("/send-email", async (req, res) => {
       },
     })
 
-    await transporter.sendMail({
+    console.log("Transporter created")
+
+    await transporter.verify()
+    console.log("Transporter verified")
+
+    const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: process.env.EMAIL_TO || process.env.EMAIL_USER,
       subject: `Message from ${name}`,
@@ -38,10 +66,20 @@ app.post("/send-email", async (req, res) => {
       replyTo: email,
     })
 
-    res.json({ success: true })
+    console.log("Email sent successfully:", info.response)
+
+    return res.status(200).json({
+      success: true,
+      message: "Email sent successfully",
+    })
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: "Server error" })
+    console.error("SEND EMAIL ERROR:", error)
+
+    return res.status(500).json({
+      success: false,
+      error: "Server error",
+      details: error.message,
+    })
   }
 })
 
