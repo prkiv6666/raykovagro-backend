@@ -8,13 +8,13 @@
     "start": "node server.js"
   },
   "repository": {
-    "type": "module",
+    "type": "git",
     "url": "git+https://github.com/prkiv6666/raykovagro-backend.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/prkiv6666/raykovagro-backend/issues"
   },
