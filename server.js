@@ -55,7 +55,7 @@ app.post("/send-email", async (req, res) => {
 
     console.log("Transporter created")
 
-    await transporter.verify()
+    // await transporter.verify()
     console.log("Transporter verified")
 
     const info = await transporter.sendMail({
@@ -73,14 +73,18 @@ app.post("/send-email", async (req, res) => {
       message: "Email sent successfully",
     })
   } catch (error) {
-    console.error("SEND EMAIL ERROR:", error)
+  console.error("SEND EMAIL ERROR FULL:", error)
+  console.error("ERROR MESSAGE:", error?.message)
+  console.error("ERROR CODE:", error?.code)
+  console.error("ERROR RESPONSE:", error?.response)
 
-    return res.status(500).json({
-      success: false,
-      error: "Server error",
-      details: error.message,
-    })
-  }
+  return res.status(500).json({
+    success: false,
+    error: "Server error",
+    details: error?.message || "Unknown error",
+    code: error?.code || null,
+  })
+}
 })
 
 const PORT = process.env.PORT || 5000
