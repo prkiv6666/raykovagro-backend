@@ -28,6 +28,8 @@ app.get("/send-email", (req, res) => {
 app.post("/send-email", async (req, res) => {
   console.log("POST /send-email called")
 
+
+
   try {
     console.log("BODY:", JSON.stringify(req.body, null, 2))
     console.log("EMAIL_USER exists:", !!process.env.EMAIL_USER)
@@ -65,7 +67,7 @@ app.post("/send-email", async (req, res) => {
 
     const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_TO || process.env.EMAIL_USER,
+      to: process.env.EMAIL_TO,
       subject: `Message from ${name}`,
       text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}`,
       replyTo: email,
