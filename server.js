@@ -9,13 +9,15 @@ dotenv.config()
 
 const app = express()
 
-const defaultOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+const normalizeOrigin = (origin) => origin.trim().replace(/\/$/, "").toLowerCase()
+
+const defaultOrigins = ["https://raykovagro.bg", "https://www.raykovagro.bg"]
 const configuredOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_ORIGIN || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean)
 
-const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins
+const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins].map(normalizeOrigin))]
 
 const requiredEnvVars = ["EMAIL_USER", "EMAIL_PASS", "EMAIL_TO"]
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key])
@@ -53,21 +55,34 @@ const sendEmailLimiter = rateLimit({
 app.set("trust proxy", 1)
 app.use(helmet())
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true)
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
 
-      if (allowedOrigins.includes(origin)) {
+    try {
+      const normalizedOrigin = normalizeOrigin(origin)
+      const { hostname } = new URL(normalizedOrigin)
+
+      if (
+        allowedOrigins.includes(normalizedOrigin) ||
+        hostname === "raykovagro.bg" ||
+        hostname === "www.raykovagro.bg"
+      ) {
         return callback(null, true)
       }
-
+    } catch {
       return callback(new Error("CORS origin not allowed"))
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  })
-)
+    }
+
+    return callback(new Error("CORS origin not allowed"))
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  optionsSuccessStatus: 204,
+}
+
+app.use(cors(corsOptions))
+app.options("*", cors(corsOptions))
 
 app.use(express.json({ limit: "50kb" }))
 
