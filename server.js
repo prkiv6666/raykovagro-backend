@@ -1,5 +1,7 @@
 import express from "express"
 import cors from "cors"
+import helmet from "helmet"
+import rateLimit from "express-rate-limit"
 import nodemailer from "nodemailer"
 import dotenv from "dotenv"
 
@@ -7,15 +9,67 @@ dotenv.config()
 
 const app = express()
 
+const defaultOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+const configuredOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins
+
+const requiredEnvVars = ["EMAIL_USER", "EMAIL_PASS", "EMAIL_TO"]
+const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key])
+
+if (missingEnvVars.length > 0) {
+  console.error(`Missing required environment variables: ${missingEnvVars.join(", ")}`)
+  process.exit(1)
+}
+
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  family: 4,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
+})
+
+const sendEmailLimiter = rateLimit({
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Too many requests. Please try again later.",
+  },
+})
+
+app.set("trust proxy", 1)
+app.use(helmet())
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true)
+      }
+
+      return callback(new Error("CORS origin not allowed"))
+    },
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   })
 )
 
-app.use(express.json())
+app.use(express.json({ limit: "50kb" }))
 
 app.get("/", (req, res) => {
   res.status(200).send("Backend is running")
@@ -25,17 +79,8 @@ app.get("/send-email", (req, res) => {
   res.status(200).send("Use POST for /send-email")
 })
 
-app.post("/send-email", async (req, res) => {
-  console.log("POST /send-email called")
-
-
-
+app.post("/send-email", sendEmailLimiter, async (req, res) => {
   try {
-    console.log("BODY:", JSON.stringify(req.body, null, 2))
-    console.log("EMAIL_USER exists:", !!process.env.EMAIL_USER)
-    console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS)
-    console.log("EMAIL_TO exists:", !!process.env.EMAIL_TO)
-
     const { name, email, message } = req.body || {}
 
     if (!name || !email || !message) {
@@ -45,25 +90,12 @@ app.post("/send-email", async (req, res) => {
       })
     }
 
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      family: 4,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    })
-
-    console.log("Transporter created")
-    console.log("Sending email...")
+    if (String(name).length > 120 || String(email).length > 254 || String(message).length > 4000) {
+      return res.status(400).json({
+        success: false,
+        error: "Input too long",
+      })
+    }
 
     const info = await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -73,25 +105,30 @@ app.post("/send-email", async (req, res) => {
       replyTo: email,
     })
 
-    console.log("Email sent successfully:", info.response)
-
     return res.status(200).json({
       success: true,
-      message: "Email sent successfully",
+      message: "Message sent successfully",
+      id: info.messageId,
     })
   } catch (error) {
-    console.error("SEND EMAIL ERROR FULL:", error)
-    console.error("ERROR MESSAGE:", error?.message)
-    console.error("ERROR CODE:", error?.code)
-    console.error("ERROR COMMAND:", error?.command)
-    console.error("ERROR RESPONSE:", error?.response)
+    console.error("SEND EMAIL ERROR:", error?.message)
 
     return res.status(500).json({
       success: false,
-      error: error?.message || "Server error",
-      code: error?.code || null,
+      error: "Server error",
     })
   }
+})
+
+app.use((error, req, res, next) => {
+  if (error?.message === "CORS origin not allowed") {
+    return res.status(403).json({
+      success: false,
+      error: "Origin not allowed",
+    })
+  }
+
+  return next(error)
 })
 
 const PORT = process.env.PORT || 8080
